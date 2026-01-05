@@ -1,10 +1,11 @@
+/// Tokens for the BASIC language.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
-    Set,
+    Let,      // Equivalent to 'SET' in the original language
     Print,
     For,
     To,
-    EndFor,
+    Next,    // Equivalent to 'ENDFOR' in the original language
     Identifier(String),
     Number(i64),
     Plus,
@@ -126,12 +127,13 @@ impl Lexer {
             }
             Some(ch) if ch.is_alphabetic() => {
                 let identifier = self.read_identifier();
+                // Match keywords (case-insensitive conversion)
                 match identifier.to_uppercase().as_str() {
-                    "SET" => Token::Set,
+                    "LET" => Token::Let,
                     "PRINT" => Token::Print,
                     "FOR" => Token::For,
                     "TO" => Token::To,
-                    "ENDFOR" => Token::EndFor,
+                    "NEXT" => Token::Next,
                     _ => Token::Identifier(identifier),
                 }
             }

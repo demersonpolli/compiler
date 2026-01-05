@@ -37,10 +37,11 @@ impl CodeGenerator {
         }
     }
 
+    /// Scan statements to find all used variables so they can be declared at the top of main().
     fn collect_variables(&mut self, statements: &[Statement]) {
         for stmt in statements {
             match stmt {
-                Statement::Set { var, .. } => {
+                Statement::Let { var, .. } => {
                     self.variables.insert(var.clone());
                 }
                 Statement::For { var, body, .. } => {
@@ -52,10 +53,12 @@ impl CodeGenerator {
         }
     }
 
+    /// Generate C code for a single statement.
     fn generate_statements(&mut self, stmt: &Statement) -> String {
         match stmt {
-            Statement::Set { var, value } => {
+            Statement::Let { var, value } => {
                 let value_string = self.generate_expr(value);
+                // BASIC assignments become C assignments with a semicolon.
                 format!("{}{} = {};\n", self.indent(), var, value_string)
             }
             Statement::Print { expr } => {

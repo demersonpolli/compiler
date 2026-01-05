@@ -1,12 +1,12 @@
-SET X = 10
-SET Y = 5
-SET Z = X + Y * 2
+LET X = 10
+LET Y = 5
+LET Z = X + Y * 2
 
 PRINT (Z)
 
 FOR I = 1 TO 5
-    SET A = I * 2
+    LET A = I * 2
     PRINT (A)
-ENDFOR
+NEXT
 
 PRINT (X - Y)

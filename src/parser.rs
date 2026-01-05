@@ -19,15 +19,19 @@ pub enum BinOp {
     Divide,
 }
 
+/// Represents an executable line or block in the language.
 #[derive(Debug, Clone)]
 pub enum Statement {
-    Set {
+    /// LET <var> = <expr>
+    Let {
         var: String,
         value: Expression,
     },
+    /// PRINT (<expr>)
     Print {
         expr: Expression,
     },
+    /// FOR <var> = <start> TO <end> ... NEXT
     For {
         var: String,
         start: Expression,
@@ -136,21 +140,22 @@ impl Parser {
         left
     }
 
-    fn parse_set(&mut self) -> Statement {
-        self.expect(Token::Set);
+    /// Parse a LET statement: LET X = 10
+    fn parse_let(&mut self) -> Statement {
+        self.expect(Token::Let);
 
         let var = match self.current_token().clone() {
             Token::Identifier(name) => {
                 self.advance();
                 name
             }
-            _ => panic!("Expected identifier after SET"),
+            _ => panic!("Expected identifier after LET"),
         };
 
         self.expect(Token::Equals);
         let expr = self.parse_expr();
 
-        Statement::Set { var, value: expr }
+        Statement::Let { var, value: expr }
     }
 
     fn parse_print(&mut self) -> Statement {
@@ -162,6 +167,7 @@ impl Parser {
         Statement::Print { expr }
     }
 
+    /// Parse a FOR loop: FOR I = 1 TO 5 ... NEXT
     fn parse_for(&mut self) -> Statement {
         self.expect(Token::For);
 
@@ -180,21 +186,26 @@ impl Parser {
         self.skip_newlines();
 
         let mut body = Vec::new();
-        while self.current_token() != &Token::EndFor && self.current_token() != &Token::Eof {
+        // Continue parsing statements until we hit NEXT or EOF
+        while self.current_token() != &Token::Next && self.current_token() != &Token::Eof {
             body.push(self.parse_statement());
             self.skip_newlines();
         }
 
-        self.expect(Token::EndFor);
+        self.expect(Token::Next);
+        
+        // Note: BASIC often allows NEXT <var>, but we simplify to just NEXT for now.
 
         Statement::For { var, start, end, body }
     }
 
+    /// Entry point for parsing any statement.
+    /// To support IF, GOTO, etc., add new matches here.
     fn parse_statement(&mut self) -> Statement {
         self.skip_newlines();
 
         match self.current_token() {
-            Token::Set => self.parse_set(),
+            Token::Let => self.parse_let(),
             Token::Print => self.parse_print(),
             Token::For => self.parse_for(),
             _ => panic!("Unexpected token: {:?}", self.current_token()),
