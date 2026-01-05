@@ -1,4 +1,4 @@
-use crate::parser::{BinOp, Expression, Statement};
+use crate::parser::{BinOp, Expression, Statement, PrintItem};
 use std::collections::BTreeSet;
 
 pub struct CodeGenerator {
@@ -61,9 +61,23 @@ impl CodeGenerator {
                 // BASIC assignments become C assignments with a semicolon.
                 format!("{}{} = {};\n", self.indent(), var, value_string)
             }
-            Statement::Print { expr } => {
-                let expr_string = self.generate_expr(expr);
-                format!("{}printf(\"%lld\\n\", (long long){});\n", self.indent(), expr_string)
+            Statement::Print { items, newline } => {
+                let mut result = String::new();
+                for item in items {
+                    match item {
+                        PrintItem::String(s) => {
+                            result.push_str(&format!("{}printf(\"%s\", \"{}\");\n", self.indent(), s));
+                        }
+                        PrintItem::Expr(expr) => {
+                            let expr_string = self.generate_expr(expr);
+                            result.push_str(&format!("{}printf(\"%lld\", (long long){});\n", self.indent(), expr_string));
+                        }
+                    }
+                }
+                if *newline {
+                    result.push_str(&format!("{}printf(\"\\n\");\n", self.indent()));
+                }
+                result
             }
             Statement::For { var, start, end, body } => {
                 let start_string = self.generate_expr(start);

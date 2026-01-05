@@ -1,18 +1,21 @@
 /// Tokens for the BASIC language.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
-    Let,      // Equivalent to 'SET' in the original language
+    Let,
     Print,
     For,
     To,
-    Next,    // Equivalent to 'ENDFOR' in the original language
+    Next,
     Identifier(String),
+    String(String),
     Number(i64),
     Plus,
     Minus,
     Multiply,
     Divide,
     Equals,
+    Comma,
+    Semicolon,
     LeftParen,
     RightParen,
     Newline,
@@ -84,6 +87,20 @@ impl Lexer {
         identifier
     }
 
+    fn read_string(&mut self) -> String {
+        self.advance(); // skip "
+        let mut string = String::new();
+        while let Some(ch) = self.current_char() {
+            if ch == '"' {
+                self.advance();
+                break;
+            }
+            string.push(ch);
+            self.advance();
+        }
+        string
+    }
+
     pub fn next_token(&mut self) -> Token {
         self.skip_whitespace();
 
@@ -113,6 +130,14 @@ impl Lexer {
                 self.advance();
                 Token::Equals
             }
+            Some(',') => {
+                self.advance();
+                Token::Comma
+            }
+            Some(';') => {
+                self.advance();
+                Token::Semicolon
+            }
             Some('(') => {
                 self.advance();
                 Token::LeftParen
@@ -120,6 +145,10 @@ impl Lexer {
             Some(')') => {
                 self.advance();
                 Token::RightParen
+            }
+            Some('"') => {
+                let string = self.read_string();
+                Token::String(string)
             }
             Some(ch) if ch.is_ascii_digit() => {
                 let number = self.read_number();

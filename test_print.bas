@@ -1,0 +1,7 @@
+LET X = 10
+PRINT "X IS ", X
+PRINT "COUNTING: ";
+FOR I = 1 TO 3
+    PRINT I; " ";
+NEXT
+PRINT "DONE"

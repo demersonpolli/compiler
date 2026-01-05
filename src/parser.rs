@@ -19,6 +19,12 @@ pub enum BinOp {
     Divide,
 }
 
+#[derive(Debug, Clone)]
+pub enum PrintItem {
+    Expr(Expression),
+    String(String),
+}
+
 /// Represents an executable line or block in the language.
 #[derive(Debug, Clone)]
 pub enum Statement {
@@ -27,9 +33,10 @@ pub enum Statement {
         var: String,
         value: Expression,
     },
-    /// PRINT (<expr>)
+    /// PRINT <item1>, <item2>, ... [; or ,]
     Print {
-        expr: Expression,
+        items: Vec<PrintItem>,
+        newline: bool,
     },
     /// FOR <var> = <start> TO <end> ... NEXT
     For {
@@ -158,13 +165,58 @@ impl Parser {
         Statement::Let { var, value: expr }
     }
 
+    /// Parse a PRINT statement: PRINT X, "HELLO";
     fn parse_print(&mut self) -> Statement {
         self.expect(Token::Print);
-        self.expect(Token::LeftParen);
-        let expr = self.parse_expr();
-        self.expect(Token::RightParen);
+        
+        let mut items = Vec::new();
+        let mut newline = true;
 
-        Statement::Print { expr }
+        loop {
+            match self.current_token() {
+                Token::Newline | Token::Eof => break,
+                Token::String(s) => {
+                    let s_clone = s.clone();
+                    self.advance();
+                    items.push(PrintItem::String(s_clone));
+                }
+                Token::Comma => {
+                    // In some BASICs, a comma by itself might mean a tab/space
+                    // but usually it's a separator. If it's at the end, it suppresses newline.
+                    self.advance();
+                    if matches!(self.current_token(), Token::Newline | Token::Eof) {
+                        newline = false;
+                        break;
+                    }
+                }
+                Token::Semicolon => {
+                    self.advance();
+                    if matches!(self.current_token(), Token::Newline | Token::Eof) {
+                        newline = false;
+                        break;
+                    }
+                }
+                _ => {
+                    // Try to parse an expression
+                    items.push(PrintItem::Expr(self.parse_expr()));
+                }
+            }
+
+            // Check for separators or end of line
+            match self.current_token() {
+                Token::Comma | Token::Semicolon => {
+                    let tok = self.current_token().clone();
+                    self.advance();
+                    if matches!(self.current_token(), Token::Newline | Token::Eof) {
+                        newline = false;
+                        break;
+                    }
+                }
+                _ => break,
+            }
+        }
+
+        Statement::Print { items, newline }
     }
 
     /// Parse a FOR loop: FOR I = 1 TO 5 ... NEXT
