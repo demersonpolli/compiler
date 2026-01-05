@@ -1,16 +1,16 @@
-use crate::parser::{BinOp, Expression, Statement, };
-use std::collections::HashSet;
+use crate::parser::{BinOp, Expression, Statement};
+use std::collections::BTreeSet;
 
 pub struct CodeGenerator {
     indent_level: usize,
-    variables: HashSet<String>,
+    variables: BTreeSet<String>,
 }
 
 impl CodeGenerator {
     pub fn new() -> Self {
         CodeGenerator {
             indent_level: 1,
-            variables: HashSet::new(),
+            variables: BTreeSet::new(),
         }
     }
 
@@ -31,7 +31,8 @@ impl CodeGenerator {
                     BinOp::Multiply => "*",
                     BinOp::Divide => "/",
                 };
-                format!("{} {} {}", left_string, operator_string, right_string)
+                // Adding parentheses to respect operator precedence in the target C code
+                format!("({} {} {})", left_string, operator_string, right_string)
             }
         }
     }
@@ -55,7 +56,7 @@ impl CodeGenerator {
         match stmt {
             Statement::Set { var, value } => {
                 let value_string = self.generate_expr(value);
-                format!("{}{} = {}", self.indent(), var, value_string)
+                format!("{}{} = {};\n", self.indent(), var, value_string)
             }
             Statement::Print { expr } => {
                 let expr_string = self.generate_expr(expr);
@@ -97,14 +98,14 @@ impl CodeGenerator {
             result.push_str("    long long ");
             let vars: Vec<String> = self.variables.iter().cloned().collect();
             result.push_str(&vars.join(", "));
-            result.push_str(";\n");
+            result.push_str(";\n\n"); // Added double newline for spacing
         }
 
         for stmt in statements {
             result.push_str(&self.generate_statements(stmt));
         }
 
-        result.push_str("    return 0;\n");
+        result.push_str("\n    return 0;\n");
         result.push_str("}\n");
 
         result
