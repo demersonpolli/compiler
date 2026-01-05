@@ -12,13 +12,11 @@ use crate::codegen::CodeGenerator;
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() < 2 {
-        eprintln!("Usage: {} <input_file> [output_file]", args[0]);
-        eprintln!("If output_file is not specified, outputs to stdout.");
-        std::process::exit(1);
-    }
-
-    let input_file = &args[1];
+    let input_file = if args.len() >= 2 {
+        &args[1]
+    } else {
+        "example.bas"
+    };
     let input = fs::read_to_string(input_file)
         .unwrap_or_else(|err| {
             eprintln!("Error reading file '{}': {}", input_file, err);
