@@ -1,0 +1,64 @@
+﻿cargo :     Checking 
+compiler v0.1.0 (C:\Us
+ers\polli\RustroverPro
+jects\compiler)
+At line:1 char:1
++ cargo check > 
+errors.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~
+    + CategoryInfo    
+          : NotSpeci  
+  fied: (    Checki   
+ ng co...jects\com    
+piler):String) []    
+, RemoteException
+    + FullyQualifiedE 
+   rrorId : NativeCo  
+  mmandError
+ 
+error[E0502]: cannot 
+borrow `*self` as 
+mutable because it is 
+also borrowed as 
+immutable
+   --> 
+src\parser.rs:339:13
+    |
+337 |         let 
+then_stmt = if let 
+Token::Number(line) = 
+self.current_token() {
+    |                 
+                      
+               ---- 
+immutable borrow 
+occurs here
+338 |             // 
+IF ... THEN 100  is 
+short for  IF ... 
+THEN GOTO 100
+339 |             
+self.advance();
+    |             
+^^^^^^^^^^^^^^ 
+mutable borrow occurs 
+here
+340 |             
+Statement { label: 
+None, node: StatementN
+ode::Goto(*line) }
+    |                 
+                      
+                      
+   ----- immutable 
+borrow later used here
+
+For more information 
+about this error, try 
+`rustc --explain 
+E0502`.
+error: could not 
+compile `compiler` 
+(bin "compiler") due 
+to 1 previous error

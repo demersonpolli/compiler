@@ -1,17 +1,23 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <time.h>
 
 int main() {
-    long long A, I, X, Y, Z;
+    srand(time(NULL));
+    double I, X;
 
-    X = 10;
-    Y = 5;
-    Z = (X + (Y * 2));
-    printf("%lld\n", (long long)Z);
-    for (I = 1; I <= 5; I++) {
-        A = (I * 2);
-        printf("%lld\n", (long long)A);
+    X = 10.0;
+    printf("%s", "X IS ");
+    printf("%g ", X);
+    printf("\n");
+    printf("%s", "COUNTING: ");
+    for (I = 1.0; I <= 3.0; I += 1.0) {
+        printf("%g ", I);
+        printf("%s", " ");
     }
-    printf("%lld\n", (long long)(X - Y));
+    printf("%s", "DONE");
+    printf("\n");
 
     return 0;
 }

@@ -3,11 +3,16 @@ use crate::lexer::{Token};
 #[derive(Debug, Clone)]
 pub enum Expression {
     Number(i64),
+    Float(f64),
     Variable(String),
     BinaryOp {
         left: Box<Expression>,
         operator: BinOp,
         right: Box<Expression>,
+    },
+    FunctionCall {
+        name: String,
+        args: Vec<Expression>,
     }
 }
 
@@ -17,6 +22,7 @@ pub enum BinOp {
     Subtract,
     Multiply,
     Divide,
+    Power,
 }
 
 #[derive(Debug, Clone)]
@@ -27,7 +33,13 @@ pub enum PrintItem {
 
 /// Represents an executable line or block in the language.
 #[derive(Debug, Clone)]
-pub enum Statement {
+pub struct Statement {
+    pub label: Option<i64>,
+    pub node: StatementNode,
+}
+
+#[derive(Debug, Clone)]
+pub enum StatementNode {
     /// LET <var> = <expr>
     Let {
         var: String,
@@ -38,13 +50,29 @@ pub enum Statement {
         items: Vec<PrintItem>,
         newline: bool,
     },
-    /// FOR <var> = <start> TO <end> ... NEXT
+    /// FOR <var> = <start> TO <end> [STEP <step>] ... NEXT
     For {
         var: String,
         start: Expression,
         end: Expression,
+        step: Option<Expression>,
         body: Vec<Statement>,
     },
+    /// IF <left> <op> <right> THEN <line_or_stmt>
+    If {
+        left: Expression,
+        op: Token, // Using Token for simplicity in comparison ops
+        right: Expression,
+        then_part: Box<Statement>,
+    },
+    /// GOTO <line>
+    Goto(i64),
+    /// INPUT <var>
+    Input(String),
+    /// REM <comment>
+    Rem,
+    /// END
+    End,
 }
 
 pub struct Parser {
@@ -92,9 +120,30 @@ impl Parser {
                 self.advance();
                 Expression::Number(n)
             }
+            Token::Float(f) => {
+                self.advance();
+                Expression::Float(f)
+            }
             Token::Identifier(name) => {
                 self.advance();
-                Expression::Variable(name)
+                if self.current_token() == &Token::LeftParen {
+                    self.advance();
+                    let mut args = Vec::new();
+                    if self.current_token() != &Token::RightParen {
+                        loop {
+                            args.push(self.parse_expr());
+                            if self.current_token() == &Token::Comma {
+                                self.advance();
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    self.expect(Token::RightParen);
+                    Expression::FunctionCall { name, args }
+                } else {
+                    Expression::Variable(name)
+                }
             }
             Token::LeftParen => {
                 self.advance();
@@ -106,17 +155,32 @@ impl Parser {
         }
     }
 
-    fn parse_term(&mut self) -> Expression {
+    fn parse_power(&mut self) -> Expression {
         let mut left = self.parse_primary();
 
-        while matches!(self.current_token(), Token::Multiply | Token::Divide) {
+        while self.current_token() == &Token::OperatorPower {
+            self.advance();
+            let right = self.parse_power(); // Right associative
+            left = Expression::BinaryOp {
+                left: Box::new(left),
+                operator: BinOp::Power,
+                right: Box::new(right),
+            };
+        }
+        left
+    }
+
+    fn parse_term(&mut self) -> Expression {
+        let mut left = self.parse_power();
+
+        while matches!(self.current_token(), Token::OperatorMultiply | Token::OperatorDivide) {
             let op = match self.current_token() {
-                Token::Multiply => BinOp::Multiply,
-                Token::Divide => BinOp::Divide,
+                Token::OperatorMultiply => BinOp::Multiply,
+                Token::OperatorDivide => BinOp::Divide,
                 _ => unreachable!(),
             };
             self.advance();
-            let right = self.parse_primary();
+            let right = self.parse_power();
             left = Expression::BinaryOp {
                 left: Box::new(left),
                 operator: op,
@@ -129,10 +193,10 @@ impl Parser {
     fn parse_expr(&mut self) -> Expression {
         let mut left = self.parse_term();
 
-        while matches!(self.current_token(), Token::Plus | Token::Minus) {
+        while matches!(self.current_token(), Token::OperatorAdd | Token::OperatorSubtract) {
             let op = match self.current_token() {
-                Token::Plus => BinOp::Add,
-                Token::Minus => BinOp::Subtract,
+                Token::OperatorAdd => BinOp::Add,
+                Token::OperatorSubtract => BinOp::Subtract,
                 _ => unreachable!(),
             };
             self.advance();
@@ -148,7 +212,7 @@ impl Parser {
     }
 
     /// Parse a LET statement: LET X = 10
-    fn parse_let(&mut self) -> Statement {
+    fn parse_let(&mut self) -> StatementNode {
         self.expect(Token::Let);
 
         let var = match self.current_token().clone() {
@@ -159,14 +223,14 @@ impl Parser {
             _ => panic!("Expected identifier after LET"),
         };
 
-        self.expect(Token::Equals);
+        self.expect(Token::Equal);
         let expr = self.parse_expr();
 
-        Statement::Let { var, value: expr }
+        StatementNode::Let { var, value: expr }
     }
 
     /// Parse a PRINT statement: PRINT X, "HELLO";
-    fn parse_print(&mut self) -> Statement {
+    fn parse_print(&mut self) -> StatementNode {
         self.expect(Token::Print);
         
         let mut items = Vec::new();
@@ -181,8 +245,6 @@ impl Parser {
                     items.push(PrintItem::String(s_clone));
                 }
                 Token::Comma => {
-                    // In some BASICs, a comma by itself might mean a tab/space
-                    // but usually it's a separator. If it's at the end, it suppresses newline.
                     self.advance();
                     if matches!(self.current_token(), Token::Newline | Token::Eof) {
                         newline = false;
@@ -197,15 +259,12 @@ impl Parser {
                     }
                 }
                 _ => {
-                    // Try to parse an expression
                     items.push(PrintItem::Expr(self.parse_expr()));
                 }
             }
 
-            // Check for separators or end of line
             match self.current_token() {
                 Token::Comma | Token::Semicolon => {
-                    let tok = self.current_token().clone();
                     self.advance();
                     if matches!(self.current_token(), Token::Newline | Token::Eof) {
                         newline = false;
@@ -216,11 +275,11 @@ impl Parser {
             }
         }
 
-        Statement::Print { items, newline }
+        StatementNode::Print { items, newline }
     }
 
-    /// Parse a FOR loop: FOR I = 1 TO 5 ... NEXT
-    fn parse_for(&mut self) -> Statement {
+    /// Parse a FOR loop: FOR I = 1 TO 5 STEP 2 ... NEXT
+    fn parse_for(&mut self) -> StatementNode {
         self.expect(Token::For);
 
         let var = match self.current_token().clone() {
@@ -230,15 +289,20 @@ impl Parser {
             }
             _ => panic!("Expected identifier after FOR"),
         };
-        self.expect(Token::Equals);
+        self.expect(Token::Equal);
         let start = self.parse_expr();
         self.expect(Token::To);
         let end = self.parse_expr();
 
+        let mut step = None;
+        if self.current_token() == &Token::Step {
+            self.advance();
+            step = Some(self.parse_expr());
+        }
+
         self.skip_newlines();
 
         let mut body = Vec::new();
-        // Continue parsing statements until we hit NEXT or EOF
         while self.current_token() != &Token::Next && self.current_token() != &Token::Eof {
             body.push(self.parse_statement());
             self.skip_newlines();
@@ -246,22 +310,103 @@ impl Parser {
 
         self.expect(Token::Next);
         
-        // Note: BASIC often allows NEXT <var>, but we simplify to just NEXT for now.
+        // Optional NEXT <var>
+        if let Token::Identifier(_) = self.current_token() {
+            self.advance();
+        }
 
-        Statement::For { var, start, end, body }
+        StatementNode::For { var, start, end, step, body }
+    }
+
+    fn parse_if(&mut self) -> StatementNode {
+        self.expect(Token::If);
+        let left = self.parse_expr();
+
+        // Using '[' as '<=' and ']' as '>='
+        let op = match self.current_token().clone() {
+            Token::Equal | Token::NotEqual |
+            Token::LessThan | Token::LessOrEqual |
+            Token::GreaterThan | Token::GreaterOrEqual => {
+                let t = self.current_token().clone();
+                self.advance();
+                t
+            }
+            _ => panic!("Expected comparison operator in IF"),
+        };
+        
+        let right = self.parse_expr();
+        self.expect(Token::Then);
+
+        let then_stmt = if let Token::Number(line) = self.current_token() {
+            let l = *line;
+            self.advance();
+            Statement { label: None, node: StatementNode::Goto(l) }
+        } else {
+            self.parse_statement()
+        };
+
+        StatementNode::If { left, op, right, then_part: Box::new(then_stmt) }
+    }
+
+    fn parse_goto(&mut self) -> StatementNode {
+        self.expect(Token::Goto);
+        match self.current_token() {
+            Token::Number(line) => {
+                let l = *line;
+                self.advance();
+                StatementNode::Goto(l)
+            }
+            _ => panic!("Expected line number after GOTO"),
+        }
+    }
+
+    fn parse_input(&mut self) -> StatementNode {
+        self.expect(Token::Input);
+        let var = match self.current_token().clone() {
+            Token::Identifier(name) => {
+                self.advance();
+                name
+            }
+            _ => panic!("Expected identifier after INPUT"),
+        };
+        StatementNode::Input(var)
     }
 
     /// Entry point for parsing any statement.
-    /// To support IF, GOTO, etc., add new matches here.
     fn parse_statement(&mut self) -> Statement {
         self.skip_newlines();
 
-        match self.current_token() {
+        let label = if let Token::Number(n) = self.current_token() {
+            let l = *n;
+            self.advance();
+            Some(l)
+        } else {
+            None
+        };
+
+        let node = match self.current_token() {
             Token::Let => self.parse_let(),
             Token::Print => self.parse_print(),
             Token::For => self.parse_for(),
-            _ => panic!("Unexpected token: {:?}", self.current_token()),
-        }
+            Token::If => self.parse_if(),
+            Token::Goto => self.parse_goto(),
+            Token::Input => self.parse_input(),
+            Token::Rem => {
+                self.advance();
+                StatementNode::Rem
+            }
+            Token::End => {
+                self.advance();
+                StatementNode::End
+            }
+            Token::Newline | Token::Eof => {
+                // Just a line number or empty line
+                StatementNode::Rem
+            }
+            _ => panic!("Unexpected token at start of statement: {:?}", self.current_token()),
+        };
+
+        Statement { label, node }
     }
 
     pub fn parse(&mut self) -> Vec<Statement> {
